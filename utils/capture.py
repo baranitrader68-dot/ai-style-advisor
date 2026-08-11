@@ -56,16 +56,18 @@ class CameraController(threading.Thread):
         shows a clear error instead of freezing).
         """
         indices = [preferred_index, 0, 1, 2]
+        dshow = getattr(cv2, "CAP_DSHOW", None)
         for idx in dict.fromkeys(indices):
             # DirectShow: opens fast and fails fast on Windows
-            cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
-            if cap.isOpened():
-                # 640x480 is plenty for face analysis and much cheaper for
-                # the CPU than 1280x720.
-                cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                return cap
-            cap.release()
+            if dshow is not None:
+                cap = cv2.VideoCapture(idx, dshow)
+                if cap.isOpened():
+                    # 640x480 is plenty for face analysis and much cheaper for
+                    # the CPU than 1280x720.
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    return cap
+                cap.release()
         # Last resort: default backend (some platforms ignore the backend flag)
         for idx in dict.fromkeys(indices):
             cap = cv2.VideoCapture(idx)
