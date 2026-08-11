@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Smart Style Advisor — Live (your camera)</title>
+<style>
+  :root{
+    --bg:#0B0E14; --panel:#151A23; --card:#1B2230; --card2:#222B3C;
+    --border:#2A3346; --text:#EAF0F6; --dim:#93A3B8;
+    --accent:#6C7CFF; --accent2:#00D4AA; --warn:#FFB454; --danger:#FF6B6B;
+    --info:#4FC3F7; --success:#4CD98F; --pink:#F06292; --purple:#BA68C8;
+    --brown:#8D6E63; --orange:#FF8A65; --gold:#FFD54F;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 15% -10%, #1a2133 0%, var(--bg) 55%);
+    color:var(--text); font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:1500px; margin:0 auto; padding:18px}
+  header{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:16px}
+  header h1{font-size:22px; font-weight:700}
+  header h1 span{color:var(--accent2)}
+  header .tag{color:var(--dim); font-size:12px; margin-top:2px}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .chip{background:var(--card); border:1px solid var(--border); border-radius:20px;
+        padding:6px 14px; font-size:12px; color:var(--dim)}
+  .chip b{color:var(--text)}
+  .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px}
+  .dot.live{background:var(--success)} .dot.warn{background:var(--warn)} .dot.err{background:var(--danger)}
+  main{display:grid; grid-template-columns: 1fr 560px; gap:14px}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:14px}
+  /* ---------- video ---------- */
+  .video-card{position:relative; overflow:hidden}
+  .video-wrap{position:relative; background:#0a0d13; border-radius:10px; overflow:hidden}
+  #cam{width:100%; display:block; aspect-ratio:16/9; object-fit:cover; background:#0a0d13;
+       transform:scaleX(-1)}
+  #overlay{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
+  #banner{position:absolute; top:12px; left:12px; padding:8px 16px; border-radius:10px;
+          font-weight:700; font-size:15px; background:var(--warn); color:#10141C}
+  #banner.perfect{background:var(--success)}
+  .video-strip{display:flex; gap:18px; margin-top:10px; font-size:12px; color:var(--dim); flex-wrap:wrap}
+  .video-strip b{color:var(--text)}
+  /* ---------- panel ---------- */
+  .panel{display:flex; flex-direction:column}
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px}
+  .tab{background:var(--card); border:1px solid var(--border); border-radius:10px; padding:7px 10px;
+       font-size:12px; color:var(--dim); cursor:pointer; transition:.15s; user-select:none}
+  .tab.active{background:var(--card2); color:var(--text); border-color:var(--accent)}
+  .content{display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 190px); overflow:auto;
+           padding-right:4px}
+  .hcard{display:flex; align-items:center; gap:14px; background:var(--card); border:1px solid var(--border);
+         border-radius:14px; padding:14px}
+  .hcard .big{font-size:30px; width:54px; height:54px; border-radius:12px; display:flex;
+              align-items:center; justify-content:center; color:#10141C}
+  .hcard h2{font-size:17px}
+  .hcard p{font-size:12px; color:var(--dim); margin-top:2px}
+  .r-card{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px}
+  .r-card h3{font-size:14px; margin-bottom:10px; display:flex; align-items:center; gap:8px}
+  .r-card p{font-size:12.5px; color:var(--dim); line-height:1.5}
+  .bullets{display:flex; flex-direction:column; gap:6px}
+  .bullet{display:flex; gap:8px; font-size:12.5px; align-items:flex-start}
+  .bullet .g{flex:none}
+  .swatches{display:flex; flex-wrap:wrap; gap:8px}
+  .sw{width:62px}
+  .sw .tile{width:62px; height:52px; border-radius:10px; border:1px solid var(--border); position:relative}
+  .sw .tile.dim::after{content:"✕"; position:absolute; inset:0; display:flex; align-items:center;
+       justify-content:center; color:var(--danger); font-size:20px; font-weight:800; background:rgba(16,20,28,.55);
+       border-radius:10px}
+  .sw .name{font-size:9px; color:var(--dim); text-align:center; margin-top:4px; line-height:1.2}
+  .conf{margin-bottom:8px}
+  .conf .row{display:flex; justify-content:space-between; font-size:11.5px; color:var(--dim); margin-bottom:3px}
+  .conf .row b{color:var(--text)}
+  .bar{height:8px; background:#0F141D; border-radius:4px; overflow:hidden}
+  .bar i{display:block; height:100%; border-radius:4px}
+  .btn{background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:10px;
+       padding:8px 12px; cursor:pointer; font-size:12.5px; transition:.15s}
+  .btn:hover{background:#2b3650}
+  .btn.active{background:var(--accent); color:#10141C; border-color:var(--accent)}
+  select{background:var(--card2); color:var(--text); border:1px solid var(--border); border-radius:10px;
+         padding:9px 12px; font-size:13px; outline:none}
+  .note{font-size:11px; color:var(--dim); line-height:1.5; padding:10px 12px;
+        background:#10151f; border-radius:10px; border:1px solid var(--border)}
+  .empty{color:var(--dim); font-size:13px; padding:10px}
+  .footer-note{font-size:10.5px; color:#66707f; margin-top:12px; text-align:center; line-height:1.5}
+  ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-thumb{background:#2A3346; border-radius:4px}
+  @media (max-width:980px){
+    main{grid-template-columns:1fr}
+    .content{max-height:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>✨ AI Smart Style <span>Advisor</span></h1>
+      <div class="tag">Uses <b>YOUR</b> camera · face shape + skin tone only · suggestions, not judgement</div>
+    </div>
+    <div class="chips">
+      <span class="chip"><span id="camDot" class="dot warn"></span>Camera: <b id="camTxt">starting</b></span>
+      <span class="chip">Mode: <b>your device</b></span>
+      <span class="chip">Face: <b id="faceTxt">not detected</b></span>
+      <span class="chip">Shape: <b id="shapeTxt">—</b></span>
+      <span class="chip">Tone: <b id="toneTxt">—</b></span>
+    </div>
+  </header>
+
+  <main>
+    <div class="card video-card">
+      <div class="video-wrap">
+        <video id="cam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="banner">Starting your camera…</div>
+      </div>
+      <div class="video-strip">
+        <span>ℹ️ <b>Allow camera access</b> when the browser asks · sit ~1 m away, good light</span>
+        <span id="guidanceTxt"></span>
+      </div>
+    </div>
+
+    <div class="card panel">
+      <div class="tabs" id="tabs"></div>
+      <div class="content" id="content"></div>
+    </div>
+  </main>
+  <div class="footer-note">
+    Suggestions are based only on visual features (face shape, skin tone) and predefined fashion rules.
+    This app never judges personality, intelligence or character.
+  </div>
+</div>
+
+<script>
+const TABS = [
+  ["dashboard","📊","Dashboard"],["fashion","👕","Fashion"],["glasses","🕶️","Glasses"],
+  ["hairstyle","💇","Hair"],["beard","🧔","Beard"],["palette","🎨","Palette"],
+  ["selfie","📸","Selfie"],["outfit","🧥","Outfit"],["occasion","✨","Occasion"],
+];
+const ACCENT = {dashboard:"#6C7CFF",fashion:"#F06292",glasses:"#4FC3F7",hairstyle:"#BA68C8",
+  beard:"#8D6E63",palette:"#FFB454",selfie:"#00D4AA",outfit:"#FF8A65",occasion:"#FFD54F"};
+const SHAPE_DESC = {
+  Oval:"Balanced proportions — most styles will suit you.",
+  Round:"Soft curves, similar width and length.",
+  Square:"Strong jawline with similar width and length.",
+  Rectangle:"Longer than wide with defined angles.",
+  Heart:"Wide forehead narrowing to a gentle chin.",
+  Diamond:"Prominent cheekbones with a narrower chin."
+};
+const BOX_COLORS = ["#00D4AA","#6C7CFF","#4FC3F7","#FFD54F","#F06292","#BA68C8"];
+
+let state = {tab:"dashboard", status:null, recs:null, colors:{}, outfit:"Navy", occasion:"Casual", online:false};
+let lastSig = "";
+
+const video = document.getElementById("cam");
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const cap = document.createElement("canvas");
+
+// ---------- camera ----------
+async function startCamera(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480}}, audio:false});
+    video.srcObject = stream;
+    document.getElementById("camDot").className = "dot live";
+    document.getElementById("camTxt").textContent = "your device";
+    setInterval(sendFrame, 300);   // ~3 fps analysis
+    boot();
+  }catch(e){
+    document.getElementById("camDot").className = "dot err";
+    document.getElementById("camTxt").textContent = "blocked";
+    document.getElementById("banner").textContent =
+      "Camera blocked — open via the HTTPS link (public tunnel) or localhost";
+    boot(); // still show the recommendations UI without live analysis
+  }
+}
+
+async function sendFrame(){
+  if(!video.videoWidth) return;
+  try{
+    const W = 480, H = Math.max(1, Math.round(video.videoHeight * W / video.videoWidth));
+    cap.width = W; cap.height = H;
+    octx.clearRect(0,0,overlay.width,overlay.height);
+    const cctx = cap.getContext("2d");
+    cctx.setTransform(-1, 0, 0, 1, W, 0);   // mirror the frame before analysis
+    cctx.drawImage(video, 0, 0, W, H);
+    cctx.setTransform(1, 0, 0, 1, 0, 0);
+    const blob = await new Promise(res => cap.toBlob(res, "image/jpeg", 0.72));
+    const fd = new FormData();
+    fd.append("image", blob, "frame.jpg");
+    const res = await fetch("/api/analyze", {method:"POST", body:fd});
+    const data = await res.json();
+    if(data.error) return;
+    state.status = data;
+    state.recs = data.recommendations;
+    drawOverlay(data);
+    render();
+
+    const sig = (data.detected?1:0)+"|"+(data.shape||"")+"|"+(data.skin_tone||"");
+    if(sig!==lastSig){ lastSig = sig; }
+  }catch(e){ /* transient */ }
+}
+
+// ---------- overlay ----------
+function drawOverlay(d){
+  const rect = overlay.getBoundingClientRect();
+  overlay.width = Math.round(rect.width);
+  overlay.height = Math.round(rect.height);
+  octx.clearRect(0,0,overlay.width,overlay.height);
+  const W = overlay.width, H = overlay.height;
+  if(!d.detected || !d.landmarks || !d.landmarks.length) return;
+  // face box
+  if(d.box){
+    const [bx,by,bw,bh] = d.box;
+    octx.strokeStyle = BOX_COLORS[0];
+    octx.lineWidth = 2.5;
+    octx.strokeRect(bx*W, by*H, bw*W, bh*H);
+    octx.fillStyle = BOX_COLORS[0];
+    octx.font = "bold 14px Segoe UI";
+    const tag = (d.shape||"?")+" | "+(d.skin_tone||"?");
+    octx.fillText(tag, bx*W+6, Math.max(14, by*H-8));
+  }
+  // landmarks
+  octx.fillStyle = "#6C7CFF";
+  for(let i=0;i<d.landmarks.length;i+=3){
+    const [x,y] = d.landmarks[i];
+    octx.beginPath();
+    octx.arc(x*W, y*H, 1.4, 0, Math.PI*2);
+    octx.fill();
+  }
+}
+
+// ---------- status chips ----------
+function updateChips(){
+  const s = state.status || {};
+  document.getElementById("faceTxt").textContent = s.detected ? "detected" : "not detected";
+  document.getElementById("shapeTxt").textContent = s.shape || "—";
+  document.getElementById("toneTxt").textContent = s.skin_tone || "—";
+  const banner = document.getElementById("banner");
+  banner.textContent = s.guidance || "Starting camera…";
+  banner.className = s.guidance==="Perfect Position" ? "perfect" : "";
+  document.getElementById("guidanceTxt").textContent = "";
+}
+
+// ---------- tabs + renderers ----------
+function initTabs(){
+  const box = document.getElementById("tabs");
+  box.innerHTML = "";
+  TABS.forEach(([key,emoji,label])=>{
+    const b = document.createElement("div");
+    b.className = "tab" + (key===state.tab ? " active":"");
+    b.innerHTML = `${emoji} ${label}`;
+    b.onclick = ()=>{ state.tab=key; document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active")); b.classList.add("active"); render(); };
+    box.appendChild(b);
+  });
+}
+function hx(name){ return state.colors[name] || "#8A93A5"; }
+function render(){
+  updateChips();
+  const box = document.getElementById("content");
+  box.innerHTML = "";
+  (renderers[state.tab]||renderers.dashboard)(box);
+}
+
+const renderers = {
+  dashboard(box){
+    const s = state.status||{};
+    if(!s.detected){
+      hcard(box,"📊","Dashboard","Live overview",ACCENT.dashboard);
+      box.appendChild(p("Position your face in the camera frame to get personalised suggestions."));
+      return;
+    }
+    hcard(box,"📊","Dashboard","Live overview of your analysis",ACCENT.dashboard);
+    rcard(box,"🧑 Detected face shape · "+(s.shape||"—"),()=>{
+      box.appendChild(p(SHAPE_DESC[s.shape]||""));
+      conf(box,"Shape confidence", s.shape_conf||0, ACCENT.dashboard);
+    });
+    rcard(box,"🎨 Approximate skin tone · "+(s.skin_tone||"—"),()=>{
+      box.appendChild(p("Undertone: "+(s.skin_undertone||"—")+" · used only for colour suggestions."));
+      conf(box,"Skin-tone confidence", s.skin_conf||0, "#00D4AA");
+    });
+  },
+  fashion(box){
+    hcard(box,"👕","AI Fashion Advisor","Colour & outfit ideas for your skin tone","#F06292");
+    const f = state.recs?.fashion; if(!f){ box.appendChild(p("Waiting for face…")); return; }
+    swatchCard(box,"👔 Shirt colours", f.shirt);
+    swatchCard(box,"👕 T-shirt colours", f.tshirt);
+    listCard(box,"🕴️ Formal outfits", f.formal, "•");
+    listCard(box,"🧢 Casual outfits", f.casual, "•");
+  },
+  glasses(box){
+    hcard(box,"🕶️","AI Glasses Recommender","Frames matched to your face shape","#4FC3F7");
+    const r = state.recs; if(!r || !r.shape){ box.appendChild(p("Waiting for face…")); return; }
+    rcard(box,"🧑 Your face shape · "+r.shape,()=>{
+      box.appendChild(p(SHAPE_DESC[r.shape]||""));
+      conf(box,"Shape confidence", state.status?.shape_conf||0, "#4FC3F7");
+    });
+    r.glasses.forEach(g=>rcard(box,"🕶️ "+g.style,()=>box.appendChild(p(g.reason))));
+  },
+  hairstyle(box){
+    hcard(box,"💇","AI Hairstyle Advisor","Cuts that complement your face shape","#BA68C8");
+    const r = state.recs; if(!r || !r.shape){ box.appendChild(p("Waiting for face…")); return; }
+    rcard(box,"🧑 Your face shape · "+r.shape,()=>{
+      box.appendChild(p(SHAPE_DESC[r.shape]||""));
+      conf(box,"Shape confidence", state.status?.shape_conf||0, "#BA68C8");
+    });
+    r.hairstyles.forEach(g=>rcard(box,"💇 "+g.style,()=>box.appendChild(p(g.reason))));
+  },
+  beard(box){
+    hcard(box,"🧔","AI Beard Style Advisor","Facial hair ideas for your face shape","#8D6E63");
+    const r = state.recs; if(!r || !r.shape){ box.appendChild(p("Waiting for face…")); return; }
+    rcard(box,"🧑 Your face shape · "+r.shape,()=>{
+      box.appendChild(p(SHAPE_DESC[r.shape]||""));
+      conf(box,"Shape confidence", state.status?.shape_conf||0, "#8D6E63");
+    });
+    listCard(box,"🧔 Recommended beard styles", r.beard.map(b=>b.style+" — "+b.reason), "🧔");
+  },
+  palette(box){
+    hcard(box,"🎨","AI Color Palette Advisor","Colours that work with your skin tone","#FFB454");
+    const r = state.recs; const pal = r?.palette;
+    if(!pal){ box.appendChild(p("Waiting for face…")); return; }
+    rcard(box,"🧑 Skin tone · "+r.tone,()=>{
+      box.appendChild(p("Undertone: "+(state.status?.skin_undertone||"—")));
+      conf(box,"Skin-tone confidence", state.status?.skin_conf||0, "#FFB454");
+    });
+    swatchCard(box,"✅ Recommended colours", pal.recommended);
+    swatchCard(box,"⛔ Colours to avoid", pal.avoid, true);
+    rcard(box,"💡 Stylist note",()=>box.appendChild(p(pal.note)));
+  },
+  selfie(box){
+    hcard(box,"📸","AI Selfie Assistant","Guide to the perfect selfie position","#00D4AA");
+    const s = state.status||{};
+    const perfect = s.guidance==="Perfect Position";
+    const g = document.createElement("div"); g.className="r-card"; g.style.textAlign="center";
+    g.innerHTML = `<div style="font-size:40px">${perfect?"✅":"🧭"}</div>
+      <h3 style="justify-content:center;color:${perfect?"#4CD98F":"#FFB454"}">${s.guidance||"Waiting…"}</h3>`;
+    box.appendChild(g);
+    rcard(box,"☑️ Live guidance checklist",()=>{
+      const cl = s.checklist||[];
+      cl.forEach(c=>box.appendChild(p((c.active?"✔ ":"○ ")+c.label, c.active?"#00D4AA":"")));
+      if(!cl.length) box.appendChild(p("Waiting for the camera to find a face…"));
+    });
+  },
+  outfit(box){
+    hcard(box,"🧥","AI Outfit Matcher","Pick a shirt colour for matching pants & shoes","#FF8A65");
+    const colors = state.recs?.shirt_colors || ["Navy","Black","White"];
+    const sel = document.createElement("select");
+    colors.forEach(c=>{ const o=document.createElement("option"); o.value=c; o.textContent=c; if(c===state.outfit) o.selected=true; sel.appendChild(o); });
+    sel.onchange = ()=>{ state.outfit=sel.value; loadOutfit(); };
+    const row = document.createElement("div"); row.style.cssText="display:flex;gap:8px";
+    row.appendChild(sel);
+    const go = document.createElement("button"); go.className="btn"; go.textContent="Suggest match"; go.onclick=loadOutfit;
+    row.appendChild(go);
+    rcard(box,"👕 Choose your shirt colour",()=>box.appendChild(row));
+    state._outfitBox = box; loadOutfit();
+  },
+  occasion(box){
+    hcard(box,"✨","AI Occasion Look","Complete looks for any event","#FFD54F");
+    const occ = state.recs?.occasions || {};
+    const names = Object.keys(occ).length ? Object.keys(occ) : ["College","Interview","Wedding","Party","Casual"];
+    const row = document.createElement("div"); row.style.cssText="display:flex;gap:6px;flex-wrap:wrap";
+    names.forEach(n=>{
+      const b = document.createElement("button"); b.className="btn"+(n===state.occasion?" active":"");
+      b.textContent = (occ[n]?.icon||"•")+" "+n;
+      b.onclick = ()=>{ state.occasion=n; render(); };
+      row.appendChild(b);
+    });
+    rcard(box,"🗓️ Choose an occasion",()=>box.appendChild(row));
+    state._occBox = box; loadOccasion();
+  }
+};
+
+async function loadOutfit(){
+  if(!state._outfitBox) return;
+  try{
+    const d = await (await fetch("/api/outfit?shirt="+encodeURIComponent(state.outfit))).json();
+    const box = state._outfitBox;
+    [...box.querySelectorAll("[data-extra]")].forEach(e=>e.remove());
+    extraCard(box,"👖 Matching pants", d.pants);
+    extraCard(box,"👟 Matching shoes", d.shoes);
+    extraCard(box,"✨ Finishing accents", [d.accent]);
+  }catch(e){}
+}
+async function loadOccasion(){
+  if(!state._occBox) return;
+  try{
+    const d = await (await fetch("/api/occasion?name="+encodeURIComponent(state.occasion))).json();
+    const box = state._occBox;
+    [...box.querySelectorAll("[data-extra]")].forEach(e=>e.remove());
+    const c = document.createElement("div"); c.className="r-card"; c.setAttribute("data-extra","");
+    const look = d.look + " " + (d.tips||[]).map(t=>"💡 "+t).join(" · ");
+    c.innerHTML = `<h3>${d.icon||"✨"} ${d.name} look</h3><p>${look}</p>`;
+    box.appendChild(c);
+  }catch(e){}
+}
+
+// ---------- building blocks ----------
+function hcard(box,emoji,title,sub,accent){
+  const c=document.createElement("div"); c.className="hcard";
+  c.innerHTML = `<div class="big" style="background:${accent}">${emoji}</div>
+    <div><h2>${title}</h2><p>${sub}</p></div>`;
+  box.appendChild(c);
+}
+function rcard(box,title,fill){
+  const c=document.createElement("div"); c.className="r-card";
+  c.innerHTML = `<h3>${title}</h3>`;
+  box.appendChild(c); fill(c);
+}
+function extraCard(box,title,items){
+  const c=document.createElement("div"); c.className="r-card"; c.setAttribute("data-extra","");
+  c.innerHTML = `<h3>${title}</h3>` + items.map(i=>`<div class="bullet"><span class="g">•</span><span>${i}</span></div>`).join("");
+  box.appendChild(c);
+}
+function p(text,color){
+  const e=document.createElement("p");
+  if(color) e.style.color = color;
+  e.textContent = text; return e;
+}
+function conf(box,label,pct,color){
+  pct = Math.max(0,Math.min(1,pct||0));
+  const d=document.createElement("div"); d.className="conf";
+  d.innerHTML = `<div class="row"><span>${label}</span><b>${Math.round(pct*100)}%</b></div>
+    <div class="bar"><i style="width:${pct*100}%; background:${color}"></i></div>`;
+  box.appendChild(d);
+}
+function swatch(name,dim){
+  const s=document.createElement("div"); s.className="sw";
+  const tile=document.createElement("div"); tile.className="tile"+(dim?" dim":"");
+  tile.style.background = hx(name);
+  const n=document.createElement("div"); n.className="name"; n.textContent=name;
+  s.appendChild(tile); s.appendChild(n); return s;
+}
+function swatchCard(box,title,names,dim){
+  rcard(box,title,()=>{
+    const d=document.createElement("div"); d.className="swatches";
+    names.forEach(n=>d.appendChild(swatch(n,dim)));
+    box.appendChild(d);
+  });
+}
+function listCard(box,title,items,glyph){
+  if(!items || !items.length) return;
+  rcard(box,title,()=>{
+    const d=document.createElement("div"); d.className="bullets";
+    items.forEach(i=>{
+      const b=document.createElement("div"); b.className="bullet";
+      b.innerHTML = `<span class="g">${glyph||"•"}</span><span>${i}</span>`;
+      d.appendChild(b);
+    });
+    box.appendChild(d);
+  });
+}
+
+// ---------- boot ----------
+async function boot(){
+  initTabs();
+  try{ state.colors = await (await fetch("/api/colors")).json(); }catch(e){}
+  render();
+}
+
+startCamera();
+</script>
+</body>
+</html>

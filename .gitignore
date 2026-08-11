@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+server.log
+server_err.log
+tunnel.log
+tunnel_err.log
+link.txt
+start_all.bat
+start_styleadvisor.vbs
+start_web_silent.ps1
+watchdog.ps1
